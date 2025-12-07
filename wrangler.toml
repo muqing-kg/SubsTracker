@@ -4,16 +4,16 @@ compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
 [env.production]
-name = "subscription-manager"
+name = "subscription-muqing"
 
 [env.staging]
-name = "subscription-manager-staging"
+name = "subscription-muqing-staging"
 
 # KV 命名空间配置
 [[kv_namespaces]]
 binding = "SUBSCRIPTIONS_KV"
-preview_id = "your-preview-kv-namespace-id"
-id = "your-production-kv-namespace-id"
+preview_id = "1bf87fe83514481ab3d7fa6cd25c200f"
+id = "1bf87fe83514481ab3d7fa6cd25c200f"
 
 # 定时任务配置 - 每天早上8点检查
 [triggers]
