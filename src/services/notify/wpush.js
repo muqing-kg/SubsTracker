@@ -48,16 +48,15 @@ export const wpushChannel = {
         body: JSON.stringify(body)
       });
       const result = await r.json().catch(() => ({}));
-      // 切勿把 apikey 打进日志；失败信息只用 code / message
-      return result && result.code === 0
-        ? ok('wpush', result)
-        : fail(
-            'wpush',
-            `WPUSH 返回 code=${result?.code} ${result?.message || result?.msg || ''}`,
-            result
-          );
+      // 第三方响应可能回显 apikey；dispatch 会把 raw/error 写入通知日志。
+      const responseCode = typeof result?.code === 'number' ? result.code : null;
+      const diagnostic = { httpStatus: r.status, code: responseCode };
+      return r.ok && responseCode === 0
+        ? ok('wpush', diagnostic)
+        : fail('wpush', `WPUSH 返回 HTTP ${r.status}，code=${responseCode ?? '未知'}`, diagnostic);
     } catch (err) {
-      return fail('wpush', errorMessage(err));
+      const apiKey = String(config.WPUSH_APIKEY).trim();
+      return fail('wpush', errorMessage(err).replaceAll(apiKey, '[REDACTED]'));
     }
   },
 

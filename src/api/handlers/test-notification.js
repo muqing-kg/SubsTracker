@@ -187,8 +187,8 @@ async function handleTestNotification(request, env) {
         WPUSH_APIKEY: (typeof body.WPUSH_APIKEY === 'string' && body.WPUSH_APIKEY.trim().length > 0)
           ? body.WPUSH_APIKEY.trim()
           : config.WPUSH_APIKEY,
-        WPUSH_CHANNEL: body.WPUSH_CHANNEL || config.WPUSH_CHANNEL,
-        WPUSH_TOPIC_CODE: body.WPUSH_TOPIC_CODE || config.WPUSH_TOPIC_CODE
+        WPUSH_CHANNEL: typeof body.WPUSH_CHANNEL === 'string' ? body.WPUSH_CHANNEL.trim() : config.WPUSH_CHANNEL,
+        WPUSH_TOPIC_CODE: typeof body.WPUSH_TOPIC_CODE === 'string' ? body.WPUSH_TOPIC_CODE.trim() : config.WPUSH_TOPIC_CODE
       };
       const title = '测试通知';
       const content = '这是一条测试通知，用于验证 WPUSH 通知功能是否正常工作。\n\n发送时间: ' + formatBeijingTime();

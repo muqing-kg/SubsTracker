@@ -396,7 +396,7 @@ describe('wpushChannel', () => {
 
   it('send：code!==0 → 失败，且错误信息不含 apikey', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse({ code: 40001, message: 'invalid key' })
+      jsonResponse({ code: 40001, message: 'invalid WPUSHshould-not-leak', apikey: 'WPUSHshould-not-leak' })
     );
     const r = await wpushChannel.send(
       { title: 'T', content: 'C' },
@@ -405,6 +405,33 @@ describe('wpushChannel', () => {
     expect(r.success).toBe(false);
     expect(r.error).toContain('40001');
     expect(r.error).not.toContain('WPUSHshould-not-leak');
+    expect(JSON.stringify(r.raw)).not.toContain('WPUSHshould-not-leak');
+  });
+
+  it('第三方回显 apikey 时通知日志不保存密钥', async () => {
+    const apiKey = 'WPUSHlog-secret';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({ code: 40001, message: `invalid ${apiKey}`, apikey: apiKey })
+    );
+    await dispatch(
+      { title: '测试', content: '正文' },
+      { ENABLED_NOTIFIERS: ['wpush'], WPUSH_APIKEY: apiKey },
+      { env, subId: 'wpush-sub' }
+    );
+    const logs = await query(env, { subId: 'wpush-sub' });
+    expect(logs).toHaveLength(1);
+    expect(JSON.stringify(logs)).not.toContain(apiKey);
+  });
+
+  it('网络异常信息回显 apikey 时脱敏', async () => {
+    const apiKey = 'WPUSHnetwork-secret';
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error(`network failed for ${apiKey}`));
+    const result = await wpushChannel.send(
+      { title: '测试', content: '正文' },
+      { WPUSH_APIKEY: apiKey }
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).not.toContain(apiKey);
   });
 
   it('配置缺失 → 直接失败', async () => {
