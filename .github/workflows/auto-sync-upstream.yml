@@ -1,0 +1,105 @@
+name: auto-sync-upstream
+
+# Fully automatic upstream mirror for fork:
+# 1) master always tracks wangwangit/SubsTracker master
+# 2) restore private deploy config + this workflow after reset
+# 3) no hand conflict resolution
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-sync-upstream
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup git identity and remotes
+        run: |
+          set -euo pipefail
+          git config user.name "substracker-sync[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/wangwangit/SubsTracker.git || true
+          git fetch upstream --tags --force
+          git fetch origin --force
+
+      - name: Snapshot maintenance files
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/sub-maint/.github/workflows
+          cp .github/workflows/auto-sync-upstream.yml /tmp/sub-maint/.github/workflows/auto-sync-upstream.yml
+          cp wrangler.toml /tmp/sub-maint/wrangler.toml
+          if [ -f AUTO_SYNC.md ]; then
+            cp AUTO_SYNC.md /tmp/sub-maint/AUTO_SYNC.md
+          fi
+
+      - name: Rebuild master from upstream
+        id: sync
+        run: |
+          set -euo pipefail
+          BEFORE="$(git rev-parse HEAD)"
+          UPSTREAM="$(git rev-parse upstream/master)"
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "upstream=$UPSTREAM" >> "$GITHUB_OUTPUT"
+
+          git checkout -B master
+          git reset --hard upstream/master
+
+          mkdir -p .github/workflows
+          cp /tmp/sub-maint/.github/workflows/auto-sync-upstream.yml .github/workflows/auto-sync-upstream.yml
+          cp /tmp/sub-maint/wrangler.toml wrangler.toml
+          if [ -f /tmp/sub-maint/AUTO_SYNC.md ]; then
+            cp /tmp/sub-maint/AUTO_SYNC.md AUTO_SYNC.md
+          fi
+
+          git add .github/workflows/auto-sync-upstream.yml wrangler.toml
+          if [ -f AUTO_SYNC.md ]; then
+            git add AUTO_SYNC.md
+          fi
+
+          if git diff --cached --quiet; then
+            echo "maintenance already present on upstream tree"
+          else
+            git commit -m "chore(maint): keep auto-sync workflow and private wrangler config"
+          fi
+
+          AFTER="$(git rev-parse HEAD)"
+          echo "after=$AFTER" >> "$GITHUB_OUTPUT"
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          if ! git push origin master --force-with-lease; then
+            echo "force-with-lease failed; retrying with force"
+            git push origin master --force
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### SubsTracker auto sync"
+            echo "- upstream: wangwangit/SubsTracker@master"
+            echo "- before: \`${{ steps.sync.outputs.before }}\`"
+            echo "- upstream: \`${{ steps.sync.outputs.upstream }}\`"
+            echo "- after: \`${{ steps.sync.outputs.after }}\`"
+            echo "- changed: \`${{ steps.sync.outputs.changed }}\`"
+            echo ""
+            echo "#### Recent commits"
+            git log --oneline -5 master || true
+          } >> "$GITHUB_STEP_SUMMARY"
